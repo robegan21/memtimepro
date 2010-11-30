@@ -51,8 +51,8 @@ int get_sample(struct memtime_info *info)
 {
      static char buffer[2048];
      char *tmp;
-     int i, utime, stime;
-     unsigned int vsize, rss;
+     long i, utime, stime;
+     unsigned long vsize, rss;
      int rc;
 
      lseek(proc_fd, 0, SEEK_SET);
@@ -66,12 +66,12 @@ int get_sample(struct memtime_info *info)
      for (i=0, tmp=buffer; i < 13; i++)
 	  tmp = strchr(tmp + 1, ' ');
 
-     sscanf(tmp + 1, "%d %d", &utime, &stime);
+     sscanf(tmp + 1, "%ld %ld", &utime, &stime);
     
      for (/* empty */; i < 22; i++)
 	  tmp = strchr(tmp + 1, ' ');
 
-     sscanf(tmp + 1, "%u %u", &vsize, &rss);
+     sscanf(tmp + 1, "%lu %lu", &vsize, &rss);
 
      info->utime_ms = utime * (1000 / HZ);
      info->stime_ms = stime * (1000 / HZ);
@@ -82,7 +82,7 @@ int get_sample(struct memtime_info *info)
      return 1;
 }
 
-unsigned int get_time()
+unsigned long get_time()
 {
      struct timeval now;
      struct timezone dummy;
@@ -97,7 +97,7 @@ unsigned int get_time()
      return (now.tv_sec * 1000) + (now.tv_usec / 1000);
 }
 
-int set_mem_limit(long int maxbytes)
+int set_mem_limit(long maxbytes)
 {
 	struct  rlimit rl;
 	long int softlimit=(long int)maxbytes*0.95;
@@ -106,7 +106,7 @@ int set_mem_limit(long int maxbytes)
 	return setrlimit(RLIMIT_AS,&rl);
 }
 
-int set_cpu_limit(long int maxseconds)
+int set_cpu_limit(long maxseconds)
 {
 	struct  rlimit rl;
 	rl.rlim_cur=maxseconds; 

@@ -48,15 +48,16 @@ int main (int argc, char *argv[] )
      struct rusage kid_usage;
      pid_t  kid;
      int    kid_status;
+     int    exit_status = EXIT_SUCCESS;
      int    i, opt, echo_args = 0, exit_flag;
-     long int sample_time=0, time = 0;
+     long   sample_time=0, time = 0;
 	 
-	 int maxkbytes=0; //kilobytes
-	 int maxseconds=0; //seconds
-	 long int maxmillis=0;
+     long maxkbytes=0; //kilobytes
+     long maxseconds=0; //seconds
+     long maxmillis=0;
 
-     unsigned int max_vsize = 0, max_rss = 0;
-     unsigned int start, end;
+     unsigned long max_vsize = 0, max_rss = 0;
+     unsigned long start, end;
 
      struct memtime_info info;
 //     struct rlimit currentl;
@@ -126,12 +127,12 @@ int main (int argc, char *argv[] )
      case 0 :	
 #if defined(CAN_USE_RLIMIT_RSS)	  
 	  if (maxkbytes>0) {
-	       set_mem_limit((long int)maxkbytes*1024);
+	       set_mem_limit((long)maxkbytes*1024);
 	  }
 #endif
 #if defined(CAN_USE_RLIMIT_CPU)	  
 	  if (maxseconds>0) {
-	       set_cpu_limit((long int)maxseconds);
+	       set_cpu_limit((long)maxseconds);
 	  }
 #endif
 	  execvp(argv[optind], &(argv[optind]));
@@ -160,7 +161,7 @@ int main (int argc, char *argv[] )
 		    end = get_time();
 		    
 		    fprintf(stderr,"%.2f user, %.2f system, %.2f elapsed"
-			    " -- VSize = %dKB, RSS = %dKB\n",
+			    " -- VSize = %ldKB, RSS = %ldKB\n",
 			    (double)info.utime_ms/1000.0,
 			    (double)info.stime_ms/1000.0,
 			    (double)(end - start)/1000.0,
@@ -191,8 +192,10 @@ int main (int argc, char *argv[] )
      
      if (WIFEXITED(kid_status)) {
 	  fprintf(stderr, "Exit [%d]\n", WEXITSTATUS(kid_status));
+          exit_status += WEXITSTATUS(kid_status);
      } else {
 	  fprintf(stderr, "Killed [%d]\n", WTERMSIG(kid_status));
+          exit_status += WTERMSIG(kid_status);
      }
 
      {
@@ -202,11 +205,11 @@ int main (int argc, char *argv[] )
 			      + (double)kid_usage.ru_stime.tv_usec / 1E6);
 
 	  fprintf(stderr, "%.2f user, %.2f system, %.2f elapsed -- "
-		  "Max VSize = %dKB, Max RSS = %dKB\n", 
+		  "Max VSize = %ldKB, Max RSS = %ldKB\n", 
 		  kid_utime, kid_stime, (double)(end - start) / 1000.0,
 		  max_vsize, max_rss);
      }
 
-     exit(EXIT_SUCCESS);
+     exit(exit_status);
 }
 

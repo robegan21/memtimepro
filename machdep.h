@@ -26,15 +26,15 @@
 #define MACHDEP_H
  
 struct memtime_info {
-     unsigned int utime_ms;
-     unsigned int stime_ms;
-     unsigned int rss_kb;
-     unsigned int vsize_kb;
+     unsigned long utime_ms;
+     unsigned long stime_ms;
+     unsigned long rss_kb;
+     unsigned long vsize_kb;
 };
 
 int init_machdep(pid_t process);
 int get_sample(struct memtime_info *info);
-unsigned int get_time();
-int set_mem_limit(long int maxbytes);
-int set_cpu_limit(long int maxseconds);
+unsigned long get_time();
+int set_mem_limit(long maxbytes);
+int set_cpu_limit(long maxseconds);
 #endif /* MACHDEP_H */
