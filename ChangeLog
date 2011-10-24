@@ -24,3 +24,10 @@
 	* max cpu time to be used by process
 	can be specified. Implemented through rlimit mechanism.
 
+2010-11-30 Rob Egan
+
+	* memory limits and time now tracked with 64-bit longs
+
+	* exit status now returns the exit status of the child processes
+
+
