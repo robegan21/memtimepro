@@ -22,6 +22,9 @@
  *
  *---------------------------------------------------------------------------*/
 
+#ifndef _SUNOS5_H_
+#define _SUNOS5_H_
+
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -35,8 +38,18 @@
 
 #include "machdep.h"
 
-static int psinfo_fd = -1;
-static int pstatus_fd = -1;
+class process_tracker : public process_tracker_base {
+private:
+     int psinfo_fd;
+     int pstatus_fd;
+
+public:
+     process_tracker(pid_t process_id, long maxbytes = -1, long maxseconds = -1) :
+          process_tracker_base(process_id, maxbytes, maxseconds), psinfo_fd(-1), pstatus_fd(-1) {
+          this->init_machdep(process_id);
+     }
+     ~process_tracker() {}
+
 
 int init_machdep(pid_t process)
 {
@@ -50,11 +63,17 @@ int init_machdep(pid_t process)
      return (psinfo_fd != -1 && pstatus_fd != -1);
 }
 
-int get_sample(struct memtime_info *info)
+void destroy_machdep() {
+     close(psinfo_fd);
+     close(pstatus_fd);
+}
+
+memtime_info get_sample()
 {
      struct psinfo pinfo;
      struct pstatus sinfo;
      int rc;
+     memtime_info info;
 
      rc = pread(psinfo_fd, &pinfo, sizeof(struct psinfo), 0);
 
@@ -68,31 +87,17 @@ int get_sample(struct memtime_info *info)
 	  return 0;
      }
 
-     info->rss_kb = pinfo.pr_rssize;
-     info->vsize_kb = pinfo.pr_size;
+     info.rss_kb = pinfo.pr_rssize;
+     info.vsize_kb = pinfo.pr_size;
 
-     info->utime_ms = ((1000 * sinfo.pr_utime.tv_sec) 
+     info.utime_ms = ((1000 * sinfo.pr_utime.tv_sec) 
 		       + (sinfo.pr_utime.tv_nsec / 1000000));
-     info->stime_ms = ((1000 * sinfo.pr_stime.tv_sec) 
+     info.stime_ms = ((1000 * sinfo.pr_stime.tv_sec) 
 		       + (sinfo.pr_stime.tv_nsec / 1000000));
 
-     return 1;
+     return info;
 }
 
-unsigned int get_time()
-{
-     struct timeval now;
-     struct timezone dummy;
-     int rc;
-
-     rc = gettimeofday(&now, &dummy);
-    
-     if (rc == -1) {
-	  return 0;
-     }
-
-     return (now.tv_sec * 1000) + (now.tv_usec / 1000);
-}
 
 int set_mem_limit(long int maxbytes)
 {
@@ -110,3 +115,28 @@ int set_cpu_limit(long int maxseconds)
 	return setrlimit(RLIMIT_CPU,&rl);
 
 }
+
+};
+
+class memtime_info_tracker : public memtime_info_tracker_base {
+public:
+    memtime_info_tracker(int max_samples) : memtime_info_tracker_base(max_samples) {}
+
+unsigned int get_time()
+{
+     struct timeval now;
+     struct timezone dummy;
+     int rc;
+
+     rc = gettimeofday(&now, &dummy);
+    
+     if (rc == -1) {
+	  return 0;
+     }
+
+     return (now.tv_sec * 1000) + (now.tv_usec / 1000);
+}
+};
+
+#endif /* _SUNOS5_H_ */
+

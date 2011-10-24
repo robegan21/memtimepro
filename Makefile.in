@@ -23,8 +23,8 @@
 ##############################################################################
 
 # Programs to use.
-CC   = @CC@
-LD   = $(CC)
+CXX   = @CXX@
+LD   = $(CXX)
 INSTALL = @INSTALL@
 
 # Options passed to the compiler and linker. 
@@ -42,7 +42,7 @@ LIBS =
 PROG = memtime
 
 # Source files.
-SRCS = memtime.c @MACHDEP@
+SRC = memtime.cpp
 
 # ---- No changes are needed below this line ----
 
@@ -52,7 +52,7 @@ bindir = @bindir@
 mandir = @mandir@
 srcdir = @srcdir@
 
-CFLAGS =  @CFLAGS@ $(EXTRAFLAGS)
+CXXFLAGS =  @CXXFLAGS@ $(EXTRAFLAGS)
 CPPFLAGS = $(INCDIR) $(DEFS) @CPPFLAGS@
 LDFLAGS = $(EXTRALDFLAGS) @LDFLAGS@
 
@@ -60,20 +60,17 @@ VPATH=@srcdir@
 
 EXE=$(PROG)@EXEEXT@
 
-OBJS= $(addsuffix .@OBJEXT@,$(basename $(SRCS)))
-DEPS= $(addsuffix .d,$(basename $(SRCS)))
+#OBJS= $(addsuffix .@OBJEXT@,$(basename $(SRCS)))
+#DEPS= $(addsuffix .d,$(basename $(SRCS)))
 
-%.d: %.c
-	$(CC) -MM $(CPPFLAGS) $< | sed -e "s/$*\.@OBJEXT@/$*.@OBJEXT@ $@/" > $@
+#%.d: %.cpp
+#	$(CXX) -D@MACHDEP@ $(CPPFLAGS) $< | sed -e "s/$*\.@OBJEXT@/$*.@OBJEXT@ $@/" > $@
 
-$(EXE): $(OBJS)
-	$(LD) $(LDFLAGS) -o $(EXE) $(OBJS) $(LIBS)
+$(EXE): $(SRC) linux.h sunos5.h machdep.h 
+	$(CXX) -D@MACHDEP@ $(CXXFLAGS) -o $(EXE) $(SRC) $(LIBS)
 
 clean:
-	rm -f *.@OBJEXT@ core *~ *.bak
-
-mostclean: clean 
-	rm -f $(EXE) *.d
+	rm -f *.@OBJEXT@ core *.d *~ *.bak $(EXE)
 
 all: $(EXE)
 

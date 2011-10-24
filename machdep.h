@@ -24,17 +24,133 @@
 
 #ifndef MACHDEP_H
 #define MACHDEP_H
- 
-struct memtime_info {
+
+#include<vector>
+
+class memtime_info {
+public:
      unsigned long utime_ms;
      unsigned long stime_ms;
      unsigned long rss_kb;
      unsigned long vsize_kb;
+     unsigned long start_ms;
+     unsigned long end_ms;
+     unsigned long num_samples;
+     memtime_info() {
+         reset();
+     }
+     memtime_info(const memtime_info &copy) {
+         *this = copy;
+     }
+     memtime_info &operator=(const memtime_info &copy) {
+         utime_ms = copy.utime_ms;
+         stime_ms = copy.stime_ms;
+         rss_kb = copy.rss_kb;
+         vsize_kb = copy.vsize_kb;
+         start_ms = copy.start_ms;
+         end_ms = copy.end_ms;
+         num_samples = copy.num_samples;
+         return *this;
+     }
+     memtime_info &operator+(const memtime_info &copy) {
+         utime_ms += copy.utime_ms;
+         stime_ms += copy.stime_ms;
+         rss_kb = rss_kb > copy.rss_kb ? rss_kb : copy.rss_kb;
+         vsize_kb = vsize_kb > copy.vsize_kb ? vsize_kb : copy.vsize_kb;
+         start_ms = start_ms < copy.start_ms ? start_ms : copy.start_ms;
+         end_ms = end_ms > copy.end_ms ? end_ms : copy.end_ms;
+         num_samples += copy.num_samples;
+         return *this;
+     }
+     void reset() {
+         utime_ms = stime_ms = rss_kb = vsize_kb = start_ms = end_ms = num_samples = 0;
+     }
+     void reset( unsigned long time_ms) {
+         reset();
+         start_ms = time_ms;
+     }
+     void set_end_time(unsigned long time_ms) {
+         end_ms = time_ms;
+         num_samples = 1;
+     }
 };
 
-int init_machdep(pid_t process);
-int get_sample(struct memtime_info *info);
-unsigned long get_time();
-int set_mem_limit(long maxbytes);
-int set_cpu_limit(long maxseconds);
+class memtime_info_tracker_base {
+public:
+     memtime_info_tracker_base(int max_samples) : _max_samples(max_samples), _current(), _samples_per_bin(1) {
+          _samples.reserve(_max_samples);
+          _current.reset(get_time());
+     }
+     void track(memtime_info &data) {
+
+          if (_current.num_samples < _samples_per_bin) {
+              data.set_end_time(get_time());
+              _current = _current + data;
+          }
+          if (_current.num_samples >= _samples_per_bin) {
+              if (_samples.size() == _max_samples)
+                   collapse();
+              _samples.push_back( _current );
+              _current.reset(_current.end_ms);
+          }
+     }
+     virtual unsigned long get_time() { return 0; }
+
+private:
+     unsigned long _max_samples;
+     std::vector<memtime_info> _samples;
+     memtime_info _current;
+     unsigned long _samples_per_bin;
+
+     void collapse() {
+         unsigned long j = 0;
+         for(unsigned long i = 0; i < _samples.size() ; i++) {
+             j = i / 2;
+             if (j != i) {
+               _samples[j] = _samples[j] + _samples[i];
+               _samples[i].reset();
+             }
+         }
+         _samples.resize(j+1);
+         _samples_per_bin *= 2;
+     }
+};
+
+class process_tracker_base {
+public:
+     process_tracker_base(pid_t process_id, long maxbytes = -1, long maxseconds = -1) :
+          _process_id(process_id), _maxbytes(maxbytes), _maxseconds(maxseconds) {
+
+          if (!this->init_machdep(_process_id))
+              throw;
+
+          if (_maxbytes > 0)
+               if (set_mem_limit(_maxbytes) != 0)
+                   throw;
+          
+          if (_maxseconds > 0)
+               if (set_cpu_limit(_maxseconds) != 0)
+                   throw;
+     }
+     ~process_tracker_base() {
+          destroy_machdep();
+     }
+     pid_t get_process_id() {
+          return _process_id;
+     }
+
+private:
+     pid_t _process_id;
+     long _maxbytes;
+     long _maxseconds;
+
+public:
+     virtual int init_machdep(pid_t process_id) { return -1; }
+     virtual void destroy_machdep() {}
+     virtual memtime_info get_sample() = 0;
+     virtual int set_mem_limit(long maxbytes) { return -1; }
+     virtual int set_cpu_limit(long maxseconds) { return -1; }
+
+};
+
 #endif /* MACHDEP_H */

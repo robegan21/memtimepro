@@ -22,6 +22,9 @@
  *
  *---------------------------------------------------------------------------*/
 
+#ifndef _LINUX_H_
+#define _LINUX_H_
+
 #include <sys/time.h>
 #include <asm/param.h>
 #include <sys/stat.h>
@@ -35,7 +38,18 @@
 
 #include "machdep.h"
 
-static int proc_fd = -1;
+class process_tracker : public process_tracker_base {
+private:
+     int proc_fd;
+
+public:
+     process_tracker(pid_t process_id, long maxbytes = -1, long maxseconds = -1) :
+          process_tracker_base(process_id, maxbytes, maxseconds), proc_fd(-1) {
+          if (!this->init_machdep(process_id))
+              throw;
+     }
+     ~process_tracker() {}
+
 
 
 int init_machdep(pid_t process)
@@ -47,19 +61,25 @@ int init_machdep(pid_t process)
      return (proc_fd != -1);
 }
 
-int get_sample(struct memtime_info *info)
+void destroy_machdep()
+{
+     close(proc_fd);
+}
+
+memtime_info get_sample()
 {
      static char buffer[2048];
      char *tmp;
      long i, utime, stime;
      unsigned long vsize, rss;
      int rc;
+     memtime_info info;
 
      lseek(proc_fd, 0, SEEK_SET);
      rc = read(proc_fd, buffer, 2048);
 
      if (rc == -1)
-	  return 0;
+	  return info;
 
      *(buffer + rc) = '\0';
 
@@ -73,28 +93,13 @@ int get_sample(struct memtime_info *info)
 
      sscanf(tmp + 1, "%lu %lu", &vsize, &rss);
 
-     info->utime_ms = utime * (1000 / HZ);
-     info->stime_ms = stime * (1000 / HZ);
+     info.utime_ms = utime * (1000 / HZ);
+     info.stime_ms = stime * (1000 / HZ);
 
-     info->rss_kb = (rss * getpagesize()) / 1024;
-     info->vsize_kb = vsize / 1024;
+     info.rss_kb = (rss * getpagesize()) / 1024;
+     info.vsize_kb = vsize / 1024;
 
-     return 1;
-}
-
-unsigned long get_time()
-{
-     struct timeval now;
-     struct timezone dummy;
-     int rc;
-
-     rc = gettimeofday(&now, &dummy);
-    
-     if (rc == -1) {
-	  return 0;
-     }
-
-     return (now.tv_sec * 1000) + (now.tv_usec / 1000);
+     return info;
 }
 
 int set_mem_limit(long maxbytes)
@@ -113,3 +118,29 @@ int set_cpu_limit(long maxseconds)
 	rl.rlim_max=maxseconds;
 	return setrlimit(RLIMIT_CPU,&rl);
 }
+
+};
+
+class memtime_info_tracker : public memtime_info_tracker_base {
+public:
+    memtime_info_tracker(int max_samples) : memtime_info_tracker_base(max_samples) {}
+
+unsigned long get_time()
+{
+     struct timeval now;
+     struct timezone dummy;
+     int rc;
+
+     rc = gettimeofday(&now, &dummy);
+    
+     if (rc == -1) {
+	  return 0;
+     }
+
+     return (now.tv_sec * 1000) + (now.tv_usec / 1000);
+}
+};
+
+
+#endif /* _LINUX_H_ */
+

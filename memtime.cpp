@@ -39,6 +39,12 @@
 #include <errno.h>
 
 #include "machdep.h"
+#ifdef LINUX
+#include "linux.h"
+#endif
+#ifdef sunos5
+#include "sunos5.h"
+#endif
 
 #define CAN_USE_RLIMIT_RSS
 #define CAN_USE_RLIMIT_CPU
@@ -58,7 +64,9 @@ int main (int argc, char *argv[] )
 
      unsigned long max_vsize = 0, max_rss = 0;
      unsigned long start, end;
+     int max_samples = 80;
 
+     memtime_info_tracker info_tracker(max_samples);
      struct memtime_info info;
 //     struct rlimit currentl;
 
@@ -116,7 +124,7 @@ int main (int argc, char *argv[] )
 	  fprintf(stderr,"\n");
      }
 
-     start = get_time();
+     start = info_tracker.get_time();
     
      switch (kid = fork()) {
 	
@@ -127,12 +135,12 @@ int main (int argc, char *argv[] )
      case 0 :	
 #if defined(CAN_USE_RLIMIT_RSS)	  
 	  if (maxkbytes>0) {
-	       set_mem_limit((long)maxkbytes*1024);
+//	       set_mem_limit((long)maxkbytes*1024);
 	  }
 #endif
 #if defined(CAN_USE_RLIMIT_CPU)	  
 	  if (maxseconds>0) {
-	       set_cpu_limit((long)maxseconds);
+//	       set_cpu_limit((long)maxseconds);
 	  }
 #endif
 	  execvp(argv[optind], &(argv[optind]));
@@ -143,14 +151,17 @@ int main (int argc, char *argv[] )
 	  break;
      }
 
-     if (!init_machdep(kid)) {
-	  fprintf(stderr, "%s: Failed to initialise sampling.\n", argv[0]);
-	  exit(EXIT_FAILURE);
-     }
+     process_tracker tracker(kid, maxkbytes*1024, maxseconds);
+
+     //if (!init_machdep(kid)) {
+//	  fprintf(stderr, "%s: Failed to initialise sampling.\n", argv[0]);
+//	  exit(EXIT_FAILURE);
+//     }
 
      do {
 
-	  get_sample(&info);
+	  info = tracker.get_sample();
+          info_tracker.track(info);
 
 	  max_vsize = (info.vsize_kb > max_vsize ? info.vsize_kb : max_vsize);
 	  max_rss = (info.rss_kb > max_rss ? info.rss_kb : max_rss);
@@ -158,7 +169,7 @@ int main (int argc, char *argv[] )
 	  if (sample_time) {
 	       time++;
 	       if (time == 10 * sample_time) {
-		    end = get_time();
+		    end = info_tracker.get_time();
 		    
 		    fprintf(stderr,"%.2f user, %.2f system, %.2f elapsed"
 			    " -- VSize = %ldKB, RSS = %ldKB\n",
@@ -172,7 +183,7 @@ int main (int argc, char *argv[] )
 	       }
 	  }
 
-	  usleep(100000);
+	  usleep(10000);
 
 	  exit_flag = ((wait4(kid, &kid_status, WNOHANG, &kid_usage) == kid)
 		       && (WIFEXITED(kid_status) || WIFSIGNALED(kid_status)));
@@ -188,7 +199,7 @@ int main (int argc, char *argv[] )
 #endif	  
      } while (!exit_flag);
      
-     end = get_time();
+     end = info_tracker.get_time();
      
      if (WIFEXITED(kid_status)) {
 	  fprintf(stderr, "Exit [%d]\n", WEXITSTATUS(kid_status));
