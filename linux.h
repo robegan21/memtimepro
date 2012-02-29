@@ -1,4 +1,4 @@
-/* -*- mode: C; c-file-style: "k&r"; -*-
+/* 
  *---------------------------------------------------------------------------*
  *
  * Copyright (c) 2000, Johan Bengtsson
@@ -43,12 +43,10 @@ private:
      int proc_fd;
 
 public:
-     process_tracker(pid_t process_id, long maxbytes = -1, long maxseconds = -1) :
-          process_tracker_base(process_id, maxbytes, maxseconds), proc_fd(-1) {
-          if (!this->init_machdep(process_id))
-              throw;
+     process_tracker(pid_t process_id) :
+          process_tracker_base(process_id), proc_fd(-1) {
      }
-     ~process_tracker() {}
+     virtual ~process_tracker() {}
 
 
 
@@ -58,7 +56,7 @@ int init_machdep(pid_t process)
      sprintf(filename, "/proc/%d/stat", (int)process);
      proc_fd = open(filename, O_RDONLY);
 
-     return (proc_fd != -1);
+     return (proc_fd != -1) ? 0 : -1;
 }
 
 void destroy_machdep()
@@ -74,6 +72,8 @@ memtime_info get_sample()
      unsigned long vsize, rss;
      int rc;
      memtime_info info;
+
+     long HZ = 1;
 
      lseek(proc_fd, 0, SEEK_SET);
      rc = read(proc_fd, buffer, 2048);
@@ -101,6 +101,11 @@ memtime_info get_sample()
 
      return info;
 }
+
+};
+
+class memtime_limit : public memtime_limit_base {
+public:
 
 int set_mem_limit(long maxbytes)
 {
@@ -141,6 +146,8 @@ unsigned long get_time()
 }
 };
 
+class memtime_fork : public memtime_fork_base {
+};
 
 #endif /* _LINUX_H_ */
 

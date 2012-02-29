@@ -40,9 +40,13 @@ case "$target_os" in
 	solaris*)
 		MACHDEP=SUNOS5
 		;;
+	darwin*)
+		MACHDEP=MACOSX
+		;;
 	*)
-		AC_MSG_ERROR(This system is not yet supported by memtime)
+		AC_MSG_ERROR(This system '$target_os' is not yet supported by memtime)
 		;;
 esac
 
+#AM_INIT_AUTOMAKE
 AC_OUTPUT(Makefile)

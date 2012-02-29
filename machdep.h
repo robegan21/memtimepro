@@ -1,4 +1,4 @@
-/* -*- mode: C; c-file-style: "k&r"; -*-
+/* 
  *---------------------------------------------------------------------------*
  *
  * Copyright (c) 2000, Johan Bengtsson
@@ -77,6 +77,10 @@ public:
 
 class memtime_info_tracker_base {
 public:
+     typedef std::vector<memtime_info> SampleVector;
+     typedef SampleVector::iterator SampleVectorI;
+     typedef SampleVector::const_iterator SampleVectorIc;
+
      memtime_info_tracker_base(int max_samples) : _max_samples(max_samples), _current(), _samples_per_bin(1) {
           _samples.reserve(_max_samples);
           _current.reset(get_time());
@@ -94,11 +98,24 @@ public:
               _current.reset(_current.end_ms);
           }
      }
-     virtual unsigned long get_time() { return 0; }
+     virtual unsigned long get_time() {return 0;}
+     long get_max_vmem() const {
+         long max_vmem = 0;
+         for(SampleVectorIc it = _samples.begin(); it != _samples.end(); it++)
+             max_vmem = max_vmem >= (long) it->vsize_kb ? max_vmem : it->vsize_kb;
+         return max_vmem;
+     }
+     long get_max_rss() const {
+         long max_rss = 0;
+         for(SampleVectorIc it = _samples.begin(); it != _samples.end(); it++)
+             max_rss = max_rss >= (long) it->rss_kb ? max_rss : it->rss_kb;
+         return max_rss;
+     }
+
 
 private:
      unsigned long _max_samples;
-     std::vector<memtime_info> _samples;
+     SampleVector _samples;
      memtime_info _current;
      unsigned long _samples_per_bin;
 
@@ -118,21 +135,14 @@ private:
 
 class process_tracker_base {
 public:
-     process_tracker_base(pid_t process_id, long maxbytes = -1, long maxseconds = -1) :
-          _process_id(process_id), _maxbytes(maxbytes), _maxseconds(maxseconds) {
-
-          if (!this->init_machdep(_process_id))
+     process_tracker_base(pid_t process_id) :
+          _process_id(process_id) {
+          if (!this->init_machdep(_process_id)) {
+              perror("Count not initialize process tracker!\n");
               throw;
-
-          if (_maxbytes > 0)
-               if (set_mem_limit(_maxbytes) != 0)
-                   throw;
-          
-          if (_maxseconds > 0)
-               if (set_cpu_limit(_maxseconds) != 0)
-                   throw;
+          }
      }
-     ~process_tracker_base() {
+     virtual ~process_tracker_base() {
           destroy_machdep();
      }
      pid_t get_process_id() {
@@ -141,15 +151,26 @@ public:
 
 private:
      pid_t _process_id;
-     long _maxbytes;
-     long _maxseconds;
 
 public:
-     virtual int init_machdep(pid_t process_id) { return -1; }
-     virtual void destroy_machdep() {}
+     virtual int init_machdep(pid_t process_id) { return -1; };
+     virtual void destroy_machdep() {};
      virtual memtime_info get_sample() = 0;
+};
+
+class memtime_limit_base {
+public:
      virtual int set_mem_limit(long maxbytes) { return -1; }
      virtual int set_cpu_limit(long maxseconds) { return -1; }
+};
+
+class memtime_fork_base {
+public:
+
+virtual pid_t native_fork ()
+{
+     return fork();
+}
 
 };
 

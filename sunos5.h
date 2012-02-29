@@ -1,4 +1,4 @@
-/* -*- mode: C; c-file-style: "k&r"; -*-
+/*
  *---------------------------------------------------------------------------*
  *
  * Copyright (c) 2000, Johan Bengtsson
@@ -44,11 +44,10 @@ private:
      int pstatus_fd;
 
 public:
-     process_tracker(pid_t process_id, long maxbytes = -1, long maxseconds = -1) :
-          process_tracker_base(process_id, maxbytes, maxseconds), psinfo_fd(-1), pstatus_fd(-1) {
-          this->init_machdep(process_id);
+     process_tracker(pid_t process_id) :
+          process_tracker_base(process_id), psinfo_fd(-1), pstatus_fd(-1) {
      }
-     ~process_tracker() {}
+     virtual ~process_tracker() {}
 
 
 int init_machdep(pid_t process)
@@ -60,7 +59,7 @@ int init_machdep(pid_t process)
      sprintf(filename, "/proc/%d/status", (int)process);
      pstatus_fd = open(filename, O_RDONLY | O_RSYNC);
 
-     return (psinfo_fd != -1 && pstatus_fd != -1);
+     return (psinfo_fd != -1 && pstatus_fd != -1) ? 0 : -1;
 }
 
 void destroy_machdep() {
@@ -98,6 +97,10 @@ memtime_info get_sample()
      return info;
 }
 
+};
+
+class memtime_limit : public memtime_limit_base {
+public:
 
 int set_mem_limit(long int maxbytes)
 {
@@ -137,6 +140,10 @@ unsigned int get_time()
      return (now.tv_sec * 1000) + (now.tv_usec / 1000);
 }
 };
+
+class memtime_fork : public memtime_fork_base {
+};
+
 
 #endif /* _SUNOS5_H_ */
 

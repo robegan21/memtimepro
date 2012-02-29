@@ -1,4 +1,4 @@
-/* -*- mode: C; c-file-style: "k&r"; -*-
+/* 
  *---------------------------------------------------------------------------*
  *
  * Copyright (c) 2000, Johan Bengtsson
@@ -30,13 +30,18 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include <signal.h>
 
 #include <errno.h>
+
+#include "rapidjson/document.h"
+#include "rapidjson/prettywriter.h"
+#include "rapidjson/filestream.h"
+
 
 #include "machdep.h"
 #ifdef LINUX
@@ -45,9 +50,13 @@
 #ifdef sunos5
 #include "sunos5.h"
 #endif
+#ifdef MACOSX
+#include "macosx.h"
+#endif
 
 #define CAN_USE_RLIMIT_RSS
 #define CAN_USE_RLIMIT_CPU
+#define USLEEP_USECS 10000
 
 int main (int argc, char *argv[] )
 {
@@ -56,33 +65,36 @@ int main (int argc, char *argv[] )
      int    kid_status;
      int    exit_status = EXIT_SUCCESS;
      int    i, opt, echo_args = 0, exit_flag;
-     long   sample_time=0, time = 0;
+     long   sample_time=0, time = 0, track_time = 0;
+     char   *jsonOutput = 0;
 	 
      long maxkbytes=0; //kilobytes
      long maxseconds=0; //seconds
      long maxmillis=0;
 
-     unsigned long max_vsize = 0, max_rss = 0;
      unsigned long start, end;
      int max_samples = 80;
 
      memtime_info_tracker info_tracker(max_samples);
      struct memtime_info info;
-//     struct rlimit currentl;
 
      if (argc < 2) {
 	  char *tmp = strrchr(argv[0], '/');       
 	  tmp = (tmp ? tmp + 1 : argv[0]);
 
 	  fprintf(stderr, 
-		  "%s: usage %s [-t <interval>] [-e] [-m <maxkilobytes>] [-c <maxcpuseconds>] <cmd> [<params>]\n",
+		  "%s: usage %s [ -o JSON_output_file ] [-t <interval>] [-e] [-m <maxkilobytes>] [-c <maxcpuseconds>] <cmd> [<params>]\n",
 		  tmp,tmp);
 	  exit(EXIT_FAILURE);
      }
 
-     while ((opt = getopt(argc, argv, "+et:m:c:")) != -1) {
+     while ((opt = getopt(argc, argv, "+eo:t:m:c:")) != -1) {
 
 	  switch (opt) {
+          case 'o' :
+               jsonOutput=optarg;
+               break;
+
 	  case 'e' : 
 	       echo_args = 1;
 	       break;
@@ -111,7 +123,7 @@ int main (int argc, char *argv[] )
 		    perror("Illegal argument to c option");
 		    exit(EXIT_FAILURE);
 	       }
-		   maxmillis=1000*maxseconds;
+		  maxmillis=1000*maxseconds;
 	       break;
 
 	  }
@@ -125,8 +137,10 @@ int main (int argc, char *argv[] )
      }
 
      start = info_tracker.get_time();
+     memtime_limit lim;
+     memtime_fork f;
     
-     switch (kid = fork()) {
+     switch (kid = f.native_fork()) {
 	
      case -1 :
 	  perror("fork failed");
@@ -135,12 +149,12 @@ int main (int argc, char *argv[] )
      case 0 :	
 #if defined(CAN_USE_RLIMIT_RSS)	  
 	  if (maxkbytes>0) {
-//	       set_mem_limit((long)maxkbytes*1024);
+	       lim.set_mem_limit((long)maxkbytes*1024);
 	  }
 #endif
 #if defined(CAN_USE_RLIMIT_CPU)	  
 	  if (maxseconds>0) {
-//	       set_cpu_limit((long)maxseconds);
+	       lim.set_cpu_limit((long)maxseconds);
 	  }
 #endif
 	  execvp(argv[optind], &(argv[optind]));
@@ -151,21 +165,16 @@ int main (int argc, char *argv[] )
 	  break;
      }
 
-     process_tracker tracker(kid, maxkbytes*1024, maxseconds);
-
-     //if (!init_machdep(kid)) {
-//	  fprintf(stderr, "%s: Failed to initialise sampling.\n", argv[0]);
-//	  exit(EXIT_FAILURE);
-//     }
+     process_tracker tracker(kid);
+     try {
 
      do {
 
-	  info = tracker.get_sample();
-          info_tracker.track(info);
+	  if ((track_time++ & 0x3f) == 0) {
+	    info = tracker.get_sample();
+            info_tracker.track(info);
+	  }
 
-	  max_vsize = (info.vsize_kb > max_vsize ? info.vsize_kb : max_vsize);
-	  max_rss = (info.rss_kb > max_rss ? info.rss_kb : max_rss);
-	  
 	  if (sample_time) {
 	       time++;
 	       if (time == 10 * sample_time) {
@@ -183,7 +192,8 @@ int main (int argc, char *argv[] )
 	       }
 	  }
 
-	  usleep(10000);
+	  if (usleep(USLEEP_USECS) != 0)
+              fprintf(stderr, "Could not usleep(USLEEP_USECS)\n");
 
 	  exit_flag = ((wait4(kid, &kid_status, WNOHANG, &kid_usage) == kid)
 		       && (WIFEXITED(kid_status) || WIFSIGNALED(kid_status)));
@@ -218,7 +228,45 @@ int main (int argc, char *argv[] )
 	  fprintf(stderr, "%.2f user, %.2f system, %.2f elapsed -- "
 		  "Max VSize = %ldKB, Max RSS = %ldKB\n", 
 		  kid_utime, kid_stime, (double)(end - start) / 1000.0,
-		  max_vsize, max_rss);
+		  info_tracker.get_max_vmem(), info_tracker.get_max_rss());
+
+          if (jsonOutput != 0) {
+
+	  rapidjson::Document report;
+	  if (report.Parse<0>("{}").HasParseError() != 0)
+	    printf("Error!\n");
+	    assert(report.IsObject());
+	    report.AddMember("program", argv[optind], report.GetAllocator());
+	  
+	    rapidjson::Value args;
+	    args.SetArray();
+	    args.Reserve(argc-optind, report.GetAllocator());
+	    for(int i=optind+1 ; i < argc ; i++) {
+	      args.PushBack(argv[i], report.GetAllocator());
+	    }
+	    report.AddMember("arguments", args, report.GetAllocator());
+	    report.AddMember("exit_status", exit_status, report.GetAllocator());
+	    report.AddMember("utime", kid_utime, report.GetAllocator());
+	    report.AddMember("stime", kid_stime, report.GetAllocator());
+	    report.AddMember("max_vmem_kb", (int64_t) info_tracker.get_max_vmem(), report.GetAllocator());
+	    report.AddMember("max_rss_kb", (int64_t) info_tracker.get_max_rss(), report.GetAllocator());
+	    report.AddMember("start_time", (int64_t) start/1000, report.GetAllocator());
+	    report.AddMember("wall_time", (double) (end - start)/1000.0, report.GetAllocator());
+
+            FILE *fp = fopen(jsonOutput, "w");
+            if (fp != 0) {
+	      rapidjson::FileStream f(fp);
+              rapidjson::PrettyWriter<rapidjson::FileStream> writer(f);
+              report.Accept(writer);        // Accept() traverses the DOM and generates Handler events.
+              fclose(fp);
+           }
+
+          }
+
+     }
+
+     } catch (...) {
+          perror("Abnormal termination of memtime\n");
      }
 
      exit(exit_status);
