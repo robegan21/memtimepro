@@ -73,8 +73,6 @@ memtime_info get_sample()
      int rc;
      memtime_info info;
 
-     long HZ = 1;
-
      lseek(proc_fd, 0, SEEK_SET);
      rc = read(proc_fd, buffer, 2048);
 
@@ -93,8 +91,8 @@ memtime_info get_sample()
 
      sscanf(tmp + 1, "%lu %lu", &vsize, &rss);
 
-     info.utime_ms = utime * (1000 / HZ);
-     info.stime_ms = stime * (1000 / HZ);
+     info.utime_ms = utime * 1000;
+     info.stime_ms = stime * 1000;
 
      info.rss_kb = (rss * getpagesize()) / 1024;
      info.vsize_kb = vsize / 1024;
