@@ -239,10 +239,16 @@ int main (int argc, char *argv[] )
 	  if (report.Parse<0>("{}").HasParseError() != 0)
 	    printf("Error!\n");
 	    assert(report.IsObject());
-            char *realPath;
-            realPath = realpath(argv[optind], NULL);
-	    report.AddMember("program", realPath, report.GetAllocator());
-            free(realPath);   
+            {
+                char *realPath, tmpPath[4096];
+                realPath = realpath(argv[optind], tmpPath);
+                if (realPath == NULL) {
+                    report.AddMember("program", argv[optind], report.GetAllocator());
+                } else {
+	            report.AddMember("program", realPath, report.GetAllocator());
+                    //free(realPath);   
+                }
+            }
 	  
 	    rapidjson::Value args;
 	    args.SetArray();
