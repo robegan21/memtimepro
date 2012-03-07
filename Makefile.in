@@ -39,7 +39,7 @@ INCDIR =
 LIBS = 
 
 # The name of the executable.
-PROG = memtime
+PROG = memtimepro
 
 # Source files.
 SRC = memtime.cpp
