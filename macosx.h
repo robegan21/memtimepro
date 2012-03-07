@@ -67,6 +67,8 @@ memtime_info get_sample()
      memtime_info info;
      // TODO implement for Mac
      int ret = getmem_v1(child_task, &info.rss_kb, &info.vsize_kb, &info.utime_ms, &info.stime_ms);     
+     if (ret != 0)
+       fprintf(stderr, "Warning getmem_v1 failed!\n");
      info.rss_kb /= 1024;
      info.vsize_kb /= 1024;
      //fprintf(stderr, "%d - %d / %d: %ld kb, %ld kb, %ld ms, %ld ms\n", ret, get_process_id(), child_task, info.vsize_kb, info.rss_kb, info.utime_ms, info.stime_ms);

@@ -72,11 +72,10 @@ int main (int argc, char *argv[] )
      long maxseconds=0; //seconds
      long maxmillis=0;
 
-     unsigned long start, end;
+     //unsigned long start, end;
      int max_samples = 80;
 
      memtime_info_tracker info_tracker(max_samples);
-     struct memtime_info info;
 
      if (argc < 2) {
 	  char *tmp = strrchr(argv[0], '/');       
@@ -136,7 +135,9 @@ int main (int argc, char *argv[] )
 	  fprintf(stderr,"\n");
      }
 
-     start = info_tracker.get_time();
+     struct memtime_info info, final_info;
+     info_tracker.track(final_info); // start the timer
+
      memtime_limit lim;
      memtime_fork f;
     
@@ -173,23 +174,32 @@ int main (int argc, char *argv[] )
 	  if ((track_time++ & 0x3f) == 0) {
 	    info = tracker.get_sample();
             info_tracker.track(info);
-	  }
 
-	  if (sample_time) {
+	     if (sample_time) {
 	       time++;
 	       if (time == 10 * sample_time) {
-		    end = info_tracker.get_time();
 		    
 		    fprintf(stderr,"%.2f user, %.2f system, %.2f elapsed"
 			    " -- VSize = %ldKB, RSS = %ldKB\n",
 			    (double)info.utime_ms/1000.0,
 			    (double)info.stime_ms/1000.0,
-			    (double)(end - start)/1000.0,
+			    (double)(info_tracker.get_walltime_ms())/1000.0,
 			    info.vsize_kb, info.rss_kb);
 		    fflush(stdout);
 		    
 		    time = 1;
 	       }
+            }
+#if !defined(CAN_USE_RLIMIT_RSS)	  
+	    if ((maxkbytes > 0) && (info.vsize_kb > maxkbytes)) {
+	  	kill(kid,SIGTERM);
+	    }
+#endif
+#if !defined(CAN_USE_RLIMIT_CPU)	  
+	    if ((maxmillis > 0) && (info.utime_ms > maxmillis)) {
+	  	kill(kid,SIGTERM);
+	    }
+#endif	  
 	  }
 
 	  if (usleep(USLEEP_USECS) != 0)
@@ -197,19 +207,10 @@ int main (int argc, char *argv[] )
 
 	  exit_flag = ((wait4(kid, &kid_status, WNOHANG, &kid_usage) == kid)
 		       && (WIFEXITED(kid_status) || WIFSIGNALED(kid_status)));
-#if !defined(CAN_USE_RLIMIT_RSS)	  
-	  if ((maxkbytes>0) && (max_vsize>maxkbytes)) {
-	  	kill(kid,SIGKILL);
-	  }
-#endif
-#if !defined(CAN_USE_RLIMIT_CPU)	  
-	  if ((maxmillis>0) && (info.utime_ms>maxmillis)) {
-	  	kill(kid,SIGKILL);
-	  }
-#endif	  
+
      } while (!exit_flag);
      
-     end = info_tracker.get_time();
+     info_tracker.set_end(final_info);
      
      if (WIFEXITED(kid_status)) {
 	  fprintf(stderr, "Exit [%d]\n", WEXITSTATUS(kid_status));
@@ -225,9 +226,11 @@ int main (int argc, char *argv[] )
 	  double kid_stime = ((double)kid_usage.ru_stime.tv_sec 
 			      + (double)kid_usage.ru_stime.tv_usec / 1E6);
 
+          info_tracker.set_times(kid_utime * 1000.0, kid_stime * 1000.0);
+
 	  fprintf(stderr, "%.2f user, %.2f system, %.2f elapsed -- "
 		  "Max VSize = %ldKB, Max RSS = %ldKB\n", 
-		  kid_utime, kid_stime, (double)(end - start) / 1000.0,
+		  kid_utime, kid_stime, (double)(final_info.get_walltime_ms()) / 1000.0,
 		  info_tracker.get_max_vmem(), info_tracker.get_max_rss());
 
           if (jsonOutput != 0) {
@@ -236,7 +239,10 @@ int main (int argc, char *argv[] )
 	  if (report.Parse<0>("{}").HasParseError() != 0)
 	    printf("Error!\n");
 	    assert(report.IsObject());
-	    report.AddMember("program", argv[optind], report.GetAllocator());
+            char *realPath;
+            realPath = realpath(argv[optind], NULL);
+	    report.AddMember("program", realPath, report.GetAllocator());
+            free(realPath);   
 	  
 	    rapidjson::Value args;
 	    args.SetArray();
@@ -246,12 +252,16 @@ int main (int argc, char *argv[] )
 	    }
 	    report.AddMember("arguments", args, report.GetAllocator());
 	    report.AddMember("exit_status", exit_status, report.GetAllocator());
-	    report.AddMember("utime", kid_utime, report.GetAllocator());
-	    report.AddMember("stime", kid_stime, report.GetAllocator());
-	    report.AddMember("max_vmem_kb", (int64_t) info_tracker.get_max_vmem(), report.GetAllocator());
-	    report.AddMember("max_rss_kb", (int64_t) info_tracker.get_max_rss(), report.GetAllocator());
-	    report.AddMember("start_time", (int64_t) start/1000, report.GetAllocator());
-	    report.AddMember("wall_time", (double) (end - start)/1000.0, report.GetAllocator());
+            memtime_info final_usage = info_tracker.get_final_info();
+
+	    //report.AddMember("utime", kid_utime, report.GetAllocator());
+	    //report.AddMember("stime", kid_stime, report.GetAllocator());
+	    //report.AddMember("max_vmem_kb", (int64_t) info_tracker.get_max_vmem(), report.GetAllocator());
+	    //report.AddMember("max_rss_kb", (int64_t) info_tracker.get_max_rss(), report.GetAllocator());
+	    report.AddMember("start_time", (int64_t) final_info.start_ms/1000, report.GetAllocator());
+	    report.AddMember("wall_time", (double) (final_info.end_ms - final_info.start_ms)/1000.0, report.GetAllocator());
+
+            info_tracker.get_final_info().getJSON("usage", report);
 
             FILE *fp = fopen(jsonOutput, "w");
             if (fp != 0) {
