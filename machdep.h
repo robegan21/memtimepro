@@ -194,13 +194,8 @@ class process_tracker_base {
 public:
      process_tracker_base(pid_t process_id) :
           _process_id(process_id) {
-          if (!this->init_machdep(_process_id)) {
-              perror("Count not initialize process tracker!\n");
-              throw;
-          }
      }
      virtual ~process_tracker_base() {
-          destroy_machdep();
      }
      pid_t get_process_id() {
           return _process_id;
@@ -210,9 +205,7 @@ private:
      pid_t _process_id;
 
 public:
-     virtual int init_machdep(pid_t process_id) { return -1; };
-     virtual void destroy_machdep() {};
-     virtual memtime_info get_sample() = 0;
+     virtual memtime_info get_sample()  = 0;
 };
 
 class memtime_limit_base {

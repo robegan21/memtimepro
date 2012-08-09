@@ -51,17 +51,6 @@ public:
      }
      virtual ~process_tracker() {}
 
-int init_machdep(pid_t process)
-{
-     // TODO implement for Mac
-     return 0;
-}
-
-void destroy_machdep()
-{
-     // TODO implement for Mac
-}
-
 memtime_info get_sample()
 {
      memtime_info info;

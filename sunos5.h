@@ -46,26 +46,19 @@ private:
 public:
      process_tracker(pid_t process_id) :
           process_tracker_base(process_id), psinfo_fd(-1), pstatus_fd(-1) {
+          char filename[64];
+          sprintf(filename, "/proc/%d/psinfo", (int)process);
+          psinfo_fd = open(filename, O_RDONLY | O_RSYNC);
+
+          sprintf(filename, "/proc/%d/status", (int)process);
+          pstatus_fd = open(filename, O_RDONLY | O_RSYNC);
+
      }
-     virtual ~process_tracker() {}
+     virtual ~process_tracker() {
+          close(psinfo_fd);
+          close(pstatus_fd);
+     }
 
-
-int init_machdep(pid_t process)
-{
-     char filename[64];
-     sprintf(filename, "/proc/%d/psinfo", (int)process);
-     psinfo_fd = open(filename, O_RDONLY | O_RSYNC);
-
-     sprintf(filename, "/proc/%d/status", (int)process);
-     pstatus_fd = open(filename, O_RDONLY | O_RSYNC);
-
-     return (psinfo_fd != -1 && pstatus_fd != -1) ? 0 : -1;
-}
-
-void destroy_machdep() {
-     close(psinfo_fd);
-     close(pstatus_fd);
-}
 
 memtime_info get_sample()
 {

@@ -45,24 +45,21 @@ private:
 public:
      process_tracker(pid_t process_id) :
           process_tracker_base(process_id), proc_fd(-1) {
+          char filename[64];
+          sprintf(filename, "/proc/%d/stat", (int)process_id);
+          proc_fd = open(filename, O_RDONLY);
+
+          if (proc_fd == -1) {
+              perror("Could not open /proc/*/stat filehandle!\n");
+          }
      }
-     virtual ~process_tracker() {}
 
+     virtual ~process_tracker() {
+          if (proc_fd != -1) {
+               close(proc_fd);
+          }
+     }
 
-
-int init_machdep(pid_t process)
-{
-     char filename[64];
-     sprintf(filename, "/proc/%d/stat", (int)process);
-     proc_fd = open(filename, O_RDONLY);
-
-     return (proc_fd != -1) ? 0 : -1;
-}
-
-void destroy_machdep()
-{
-     close(proc_fd);
-}
 
 memtime_info get_sample()
 {

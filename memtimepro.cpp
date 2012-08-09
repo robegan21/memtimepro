@@ -166,8 +166,8 @@ int main (int argc, char *argv[] )
 	  break;
      }
 
-     process_tracker tracker(kid);
      try {
+       process_tracker tracker(kid);
 
      do {
 
@@ -236,17 +236,16 @@ int main (int argc, char *argv[] )
           if (jsonOutput != 0) {
 
 	  rapidjson::Document report;
+          char *realPath = NULL, tmpPath[4096];
 	  if (report.Parse<0>("{}").HasParseError() != 0)
 	    printf("Error!\n");
 	    assert(report.IsObject());
             {
-                char *realPath, tmpPath[4096];
                 realPath = realpath(argv[optind], tmpPath);
                 if (realPath == NULL) {
                     report.AddMember("program", argv[optind], report.GetAllocator());
                 } else {
 	            report.AddMember("program", realPath, report.GetAllocator());
-                    //free(realPath);   
                 }
             }
 	  
@@ -275,7 +274,8 @@ int main (int argc, char *argv[] )
               rapidjson::PrettyWriter<rapidjson::FileStream> writer(f);
               report.Accept(writer);        // Accept() traverses the DOM and generates Handler events.
               fclose(fp);
-           }
+            }
+            //if (realPath != NULL) free(realPath);
 
           }
 
