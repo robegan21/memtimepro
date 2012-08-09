@@ -42,7 +42,7 @@ LIBS =
 PROG = memtimepro
 
 # Source files.
-SRC = memtime.cpp
+SRC = memtimepro.cpp
 
 # ---- No changes are needed below this line ----
 

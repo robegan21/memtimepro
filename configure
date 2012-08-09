@@ -576,7 +576,7 @@ PACKAGE_VERSION=
 PACKAGE_STRING=
 PACKAGE_BUGREPORT=
 
-ac_unique_file="memtime.cpp"
+ac_unique_file="memtimepro.cpp"
 ac_subst_vars='SHELL
 PATH_SEPARATOR
 PACKAGE_NAME
@@ -2512,8 +2512,8 @@ case "$target_os" in
 		MACHDEP=MACOSX
 		;;
 	*)
-		{ { echo "$as_me:$LINENO: error: This system '$target_os' is not yet supported by memtime" >&5
-echo "$as_me: error: This system '$target_os' is not yet supported by memtime" >&2;}
+		{ { echo "$as_me:$LINENO: error: This system '$target_os' is not yet supported by memtimepro" >&5
+echo "$as_me: error: This system '$target_os' is not yet supported by memtimepro" >&2;}
    { (exit 1); exit 1; }; }
 		;;
 esac

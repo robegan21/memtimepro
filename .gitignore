@@ -1,5 +1,5 @@
 *.o
 *.d
 config.*
-memtime
+memtimepro
 Makefile
