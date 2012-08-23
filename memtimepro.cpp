@@ -64,7 +64,7 @@ int main (int argc, char *argv[] )
      pid_t  kid;
      int    kid_status;
      int    exit_status = EXIT_SUCCESS;
-     int    i, opt, echo_args = 0, exit_flag;
+     int    i, opt, echo_args = 0, quiet = 0, exit_flag;
      long   sample_time=0, time = 0, track_time = 0;
      char   *jsonOutput = 0;
 	 
@@ -82,12 +82,12 @@ int main (int argc, char *argv[] )
 	  tmp = (tmp ? tmp + 1 : argv[0]);
 
 	  fprintf(stderr, 
-		  "%s: usage %s [ -o JSON_output_file ] [-t <interval>] [-e] [-m <maxkilobytes>] [-c <maxcpuseconds>] <cmd> [<params>]\n",
+		  "%s: usage %s [ -o JSON_output_file ] [-t <interval>] [-q] [-e] [-m <maxkilobytes>] [-c <maxcpuseconds>] <cmd> [<params>]\n",
 		  tmp,tmp);
 	  exit(EXIT_FAILURE);
      }
 
-     while ((opt = getopt(argc, argv, "+eo:t:m:c:")) != -1) {
+     while ((opt = getopt(argc, argv, "+eqo:t:m:c:")) != -1) {
 
 	  switch (opt) {
           case 'o' :
@@ -97,6 +97,10 @@ int main (int argc, char *argv[] )
 	  case 'e' : 
 	       echo_args = 1;
 	       break;
+
+          case 'q' :
+               quiet = 1;
+               break;
 
 	  case 't' :
 	       errno = 0;
@@ -128,7 +132,7 @@ int main (int argc, char *argv[] )
 	  }
      }
 
-     if (echo_args) {
+     if (echo_args && quiet == 0) {
 	  fprintf(stderr,"Command line: ");
 	  for (i = optind; i < argc; i++)
 	       fprintf(stderr,"%s ", argv[i]);
@@ -179,7 +183,8 @@ int main (int argc, char *argv[] )
 	       time++;
 	       if (time == 10 * sample_time) {
 		    
-		    fprintf(stderr,"%.2f user, %.2f system, %.2f elapsed"
+                    if (quiet == 0)
+		        fprintf(stderr,"%.2f user, %.2f system, %.2f elapsed"
 			    " -- VSize = %ldKB, RSS = %ldKB\n",
 			    (double)info.utime_ms/1000.0,
 			    (double)info.stime_ms/1000.0,
@@ -202,7 +207,7 @@ int main (int argc, char *argv[] )
 #endif	  
 	  }
 
-	  if (usleep(USLEEP_USECS) != 0)
+	  if (usleep(USLEEP_USECS) != 0 && quiet == 0)
               fprintf(stderr, "Could not usleep(USLEEP_USECS)\n");
 
 	  exit_flag = ((wait4(kid, &kid_status, WNOHANG, &kid_usage) == kid)
@@ -213,10 +218,12 @@ int main (int argc, char *argv[] )
      info_tracker.set_end(final_info);
      
      if (WIFEXITED(kid_status)) {
-	  fprintf(stderr, "Exit [%d]\n", WEXITSTATUS(kid_status));
+          if (quiet == 0)
+	      fprintf(stderr, "Exit [%d]\n", WEXITSTATUS(kid_status));
           exit_status += WEXITSTATUS(kid_status);
      } else {
-	  fprintf(stderr, "Killed [%d]\n", WTERMSIG(kid_status));
+          if (quiet == 0)
+	      fprintf(stderr, "Killed [%d]\n", WTERMSIG(kid_status));
           exit_status += WTERMSIG(kid_status);
      }
 
@@ -228,7 +235,8 @@ int main (int argc, char *argv[] )
 
           info_tracker.set_times(kid_utime * 1000.0, kid_stime * 1000.0);
 
-	  fprintf(stderr, "%.2f user, %.2f system, %.2f elapsed -- "
+          if (quiet == 0)
+	      fprintf(stderr, "%.2f user, %.2f system, %.2f elapsed -- "
 		  "Max VSize = %ldKB, Max RSS = %ldKB\n", 
 		  kid_utime, kid_stime, (double)(final_info.get_walltime_ms()) / 1000.0,
 		  info_tracker.get_max_vmem(), info_tracker.get_max_rss());
